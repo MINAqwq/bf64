@@ -100,6 +100,35 @@ skiploop(FILE *code)
 	}while(c != EOF);
 }
 
+char
+getinput()
+{
+	joypad_buttons_t btn;
+
+	while(1){
+		joypad_poll();
+		JOYPAD_PORT_FOREACH(port){
+			btn = joypad_get_buttons_pressed(port);
+			if(btn.start)	return  0;
+			if(btn.a)		return  1;
+			if(btn.b)		return  2;
+			if(btn.z)		return  3;
+			if(btn.d_up)	return  4;
+			if(btn.d_down)	return  5;
+			if(btn.d_left)	return  6;
+			if(btn.d_right)	return  7;
+			if(btn.x)		return  8;
+			if(btn.y)		return  9;
+			if(btn.l)		return 10;
+			if(btn.r)		return 11;
+			if(btn.c_up)	return 12;
+			if(btn.c_down)	return 13;
+			if(btn.c_left)	return 14;
+			if(btn.c_right)	return 15;
+		}
+	}
+}
+
 void
 interpret(FILE *code)
 {
@@ -134,7 +163,8 @@ interpret(FILE *code)
 
 				fseek(code, stackpop(0), SEEK_SET); break;
 			case '.': putchar(mem[idx]); break;
-			case ',': break; /* TODO */
+			case ',': mem[idx] = getinput(); break;
+			case 'L': printf("%d\n", idx); break;
 			default:
 				continue;
 		}
