@@ -19,8 +19,9 @@ enum {
 
 static int curstate = Smenu;
 static int curinit = 0;
+static int progend = 0;
 
-static char *memory = NULL;
+static char *mem = NULL;
 const static int memsize = 16384; /* 16KiB */
 
 static int idx = 0;
@@ -37,28 +38,68 @@ fatal(const char *msg)
 }
 
 void
-interpret(const char *code)
+interpret(FILE *code)
 {
+	int in;
 	char c;
 
-	for(c = *code; c != 0; c = *(++code)){
+	memset(mem, 0, memsize);
+	for(in = fgetc(code); in != EOF; in = fgetc(code)){
+		c = (char)in;
 		switch(c){
-			case '+': memory[idx]++; break;
-			case '-': memory[idx]--; break;
+			case '+': mem[idx]++; break;
+			case '-': mem[idx]--; break;
 			case '<': idx = (idx == 0)
 							? (memsize - 1)
 							: idx - 1; break;
-			case '>': idx = (memsize - 1)
+			case '>': idx = (idx == (memsize - 1))
 							? 0
 							: idx + 1; break;
 			case '[': break; /* TODO */
 			case ']': break; /* TODO */
-			case '.': putchar(memory[idx]); break;
+			case '.': putchar(mem[idx]); break;
 			case ',': break; /* TODO */
 			default:
 				continue;
 		}
 	}
+}
+
+int
+interpretfile(int idx)
+{
+	int ret;
+	FILE *fp;
+	int size;
+	char path[MAX_FILENAME_LEN + 7];
+
+	strcpy(path, "rom://");
+	strncpy(path + 6, list[idx].filename, MAX_FILENAME_LEN + 1);
+
+	printf("running %s...\n", path);
+
+	fp = fopen(path, "r");
+	if(!fp)
+		return 1;
+
+	ret = 1;
+
+	fseek(fp, 0, SEEK_END);
+	size = ftell(fp);
+	rewind(fp);
+
+	if(size == 0){
+		printf("error: file empty\n");
+		goto close;
+	}
+
+	interpret(fp);
+
+	ret = 0;
+
+close:
+	fclose(fp);
+	return ret;
 }
 
 void
@@ -69,16 +110,25 @@ stateinit()
 			/* if display already initialised */
 			display_close();
 			display_init(RESOLUTION_320x240, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);
+			selectchanged = 1;
 			break;
 		case Sprog:
 			/* console init will close old display */
 			console_init();
+			progend = 1;
 			break;
 		default:
 			break;
 	}
 
 	curinit = 1;
+}
+
+void
+statechange(int s)
+{
+	curstate = s;
+	curinit = 0;
 }
 
 void
@@ -104,8 +154,7 @@ populate_dir(int *count)
 	direntry_t *list = malloc(sizeof(*list));
     int ret = dir_findfirst(dir, &buf);
 
-    if( ret != 0 ) 
-    {
+    if(ret != 0) {
         /* Free stuff */
         free(list);
         *count = 0;
@@ -115,23 +164,20 @@ populate_dir(int *count)
     }
 
     /* Copy in loop */
-    while( ret == 0 )
-    {
+    while(ret == 0){
         list[(*count)-1].type = buf.d_type;
         strcpy(list[(*count)-1].filename, buf.d_name);
 
         /* Grab next */
         ret = dir_findnext(dir,&buf);
 
-        if( ret == 0 )
-        {
+        if(ret == 0){
             (*count)++;
             list = realloc(list, sizeof(direntry_t) * (*count));
         }
     }
 
-/*	if(*count > 0)
-    {
+/*	if(*count > 0){
         / Should sort! /
         qsort(list, *count, sizeof(direntry_t), compare);
     }*/
@@ -196,6 +242,12 @@ readinput()
 				selectchanged = 1;
 			}
 		}
+
+		if(btn.a)
+			statechange(Sprog);
+
+		if(btn.b && curstate == Sprog)
+			statechange(Smenu);
 	}
 }
 
@@ -213,9 +265,18 @@ main(void)
 	if(list == NULL)
 		fatal("failed reading root dir");
 
+	mem = malloc(memsize);
+	if(mem == NULL)
+		fatal("buffer allocation failed");
+
 	while(1){
 		render();
 		readinput();
+
+		if(progend == 1){
+			interpretfile(selected);
+			progend = 0;
+		}
 	}
 
 	return 0;
