@@ -24,6 +24,9 @@ static int progend = 0;
 static char *mem = NULL;
 const static int memsize = 16384; /* 16KiB */
 
+static int *stack = NULL;
+static int stacksize = 0;
+
 static int idx = 0;
 
 /* selected entry */
@@ -35,6 +38,66 @@ fatal(const char *msg)
 {
 	printf("[FATAL] %s\n", msg);
 	while(1);
+}
+
+void
+stackpush(int addr)
+{
+	if(stacksize == 0){
+		stack = malloc(sizeof(int));
+		if(stack == NULL)
+			fatal("memory allocation failed");
+	}else{
+		stack = realloc(stack, (stacksize + 1) * sizeof(int));
+	}
+
+	stack[stacksize] = addr;
+
+	stacksize++;
+}
+
+int
+stackpop(int rm)
+{
+	int addr;
+
+	if(stacksize == 0)
+		fatal("tried to pop on empty stack");
+
+	addr = rm
+			? stack[--stacksize]
+			: stack[stacksize - 1];
+
+	if(stacksize != 0)
+		stack = realloc(stack, stacksize * sizeof(int));
+	else
+		free(stack);
+
+	return addr;
+}
+
+void
+skiploop(FILE *code)
+{
+	char ch;
+	int c;
+	int l;
+
+	l = 0;
+	do{
+		c = fgetc(code);
+		ch = (char)c;
+
+		if(ch == '[')
+			l++;
+
+		if(ch == ']'){
+			if(l != 0)
+				l--;
+			else
+				break;
+		}
+	}while(c != EOF);
 }
 
 void
@@ -55,8 +118,21 @@ interpret(FILE *code)
 			case '>': idx = (idx == (memsize - 1))
 							? 0
 							: idx + 1; break;
-			case '[': break; /* TODO */
-			case ']': break; /* TODO */
+			case '[':
+				if(mem[idx] == 0){
+					skiploop(code);
+					break;
+				}
+
+				stackpush(ftell(code));
+				break;
+			case ']':
+				if(mem[idx] == 0){
+					(void)stackpop(1);
+					break;
+				}
+
+				fseek(code, stackpop(0), SEEK_SET); break;
 			case '.': putchar(mem[idx]); break;
 			case ',': break; /* TODO */
 			default:
