@@ -13,10 +13,15 @@ bf.z64: $(BUILD_DIR)/bf.dfs
 
 $(BUILD_DIR)/bf.elf: $(OBJS)
 
-$(BUILD_DIR)/bf.dfs: $(wildcard $(SOURCE_DIR)/filesystem/*)
+$(BUILD_DIR)/bf.dfs: $(wildcard $(SOURCE_DIR)/filesystem/*) filesystem/audio/menu.wav64
+
+filesystem/audio/%.wav64: assets/%.wav
+	@mkdir -p $(dir $@)
+	@echo "    [AUDIO] $@"
+	@$(N64_AUDIOCONV) -o filesystem/audio --wav-loop true "$<"
 
 clean:
-	rm -rf $(BUILD_DIR) *.z64
+	rm -rf $(BUILD_DIR) *.z64 filesystem/audio/*.wav64
 .PHONY: clean
 
 -include $(wildcard $(BUILD_DIR)/*.d)

@@ -10,12 +10,14 @@ typedef struct
 static direntry_t *list;
 static int listn = 0;
 
-char dir[512] = "rom://";
+char dir[512] = "rom://bf/";
 
 enum {
 	Smenu,
 	Sprog,
 };
+
+static wav64_t wav;
 
 static int curstate = Smenu;
 static int curinit = 0;
@@ -130,6 +132,16 @@ getinput()
 }
 
 void
+musicplay()
+{
+	if(!audio_can_write())
+		return;
+
+	mixer_poll(audio_write_begin(), audio_get_buffer_length());
+	audio_write_end();
+}
+
+void
 interpret(FILE *code)
 {
 	int in;
@@ -137,6 +149,9 @@ interpret(FILE *code)
 
 	memset(mem, 0, memsize);
 	for(in = fgetc(code); in != EOF; in = fgetc(code)){
+		/* is this hack? i think so */
+		musicplay();
+
 		c = (char)in;
 		switch(c){
 			case '+': mem[idx]++; break;
@@ -177,10 +192,10 @@ interpretfile(int idx)
 	int ret;
 	FILE *fp;
 	int size;
-	char path[MAX_FILENAME_LEN + 7];
+	char path[MAX_FILENAME_LEN + 10];
 
-	strcpy(path, "rom://");
-	strncpy(path + 6, list[idx].filename, MAX_FILENAME_LEN + 1);
+	strcpy(path, "rom://bf/");
+	strncpy(path + 9, list[idx].filename, MAX_FILENAME_LEN + 1);
 
 	printf("running %s...\n", path);
 
@@ -209,6 +224,13 @@ close:
 }
 
 void
+musicinit()
+{
+	wav64_open(&wav, "rom:/audio/menu.wav64");
+	wav64_play(&wav, 0);
+}
+
+void
 stateinit()
 {
 	switch(curstate){
@@ -228,13 +250,6 @@ stateinit()
 	}
 
 	curinit = 1;
-}
-
-void
-statechange(int s)
-{
-	curstate = s;
-	curinit = 0;
 }
 
 void
@@ -325,6 +340,13 @@ render()
 }
 
 void
+statechange(int s)
+{
+	curstate = s;
+	curinit = 0;
+}
+
+void
 readinput()
 {
 	joypad_buttons_t btn;
@@ -362,6 +384,10 @@ main(void)
 {
 	timer_init();
 	joypad_init();
+	audio_init(44100, 128);
+	mixer_init(32);
+	mixer_ch_set_limits(6, 0, 128000, 0);
+
 	console_init();
 	
 	if(dfs_init(DFS_DEFAULT_LOCATION) != DFS_ESUCCESS)
@@ -374,8 +400,10 @@ main(void)
 	mem = malloc(memsize);
 	if(mem == NULL)
 		fatal("buffer allocation failed");
-
+	
+	musicinit();
 	while(1){
+		musicplay();
 		render();
 		readinput();
 
