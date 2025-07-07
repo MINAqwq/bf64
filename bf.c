@@ -102,6 +102,16 @@ skiploop(FILE *code)
 	}while(c != EOF);
 }
 
+void
+musicplay()
+{
+	if(!audio_can_write())
+		return;
+
+	mixer_poll(audio_write_begin(), audio_get_buffer_length());
+	audio_write_end();
+}
+
 char
 getinput()
 {
@@ -110,6 +120,8 @@ getinput()
 	while(1){
 		joypad_poll();
 		JOYPAD_PORT_FOREACH(port){
+			/* hahahaha */
+			musicplay();
 			btn = joypad_get_buttons_pressed(port);
 			if(btn.start)	return  0;
 			if(btn.a)		return  1;
@@ -129,16 +141,6 @@ getinput()
 			if(btn.c_right)	return 15;
 		}
 	}
-}
-
-void
-musicplay()
-{
-	if(!audio_can_write())
-		return;
-
-	mixer_poll(audio_write_begin(), audio_get_buffer_length());
-	audio_write_end();
 }
 
 void
@@ -384,7 +386,7 @@ main(void)
 {
 	timer_init();
 	joypad_init();
-	audio_init(44100, 128);
+	audio_init(44100, 256);
 	mixer_init(32);
 	mixer_ch_set_limits(6, 0, 128000, 0);
 
